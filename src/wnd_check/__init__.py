@@ -85,13 +85,13 @@ SCHEMA_VERSION = "2.0.0"
 #                          a check that cannot report is worse than one that reports
 #                          over IPv4.
 #
-# Installed at **import time**, not inside `Check.run()`, because some checks build
-# API clients (and resolve hosts) at module scope. Every check imports this module,
-# and the runner spawns each check as its own process — so this one line is the only
-# in-process chokepoint that reaches all of them.
+# This is **opt-in**: importing this module has no side effects. Call
+# `install_ipv4_preference()` once, early in your entrypoint (before any host is
+# resolved), to enable it for the process. Call it before building API clients that
+# resolve hosts at module scope — the reorder only affects resolutions after the call.
 #
-# NOTE: this cannot help a check that shells out to a subprocess (a separate Python
-# process with its own socket module).
+# NOTE: it cannot help a process that shells out to a subprocess (a separate Python
+# process with its own socket module) — call it there too.
 
 
 def _prefer_ipv4(getaddrinfo: Callable[..., list]) -> Callable[..., list]:
@@ -113,8 +113,6 @@ def install_ipv4_preference() -> None:
     ordered.__wnd_ipv4_first__ = True  # type: ignore[attr-defined]
     socket.getaddrinfo = ordered  # type: ignore[assignment]
 
-
-install_ipv4_preference()
 
 # Categories the wire schema accepts (check-schema.json `category` enum).
 _CATEGORIES = ("assertion", "other")

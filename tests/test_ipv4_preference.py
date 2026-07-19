@@ -19,6 +19,8 @@ resolver's own preference among equals still stands).
 from __future__ import annotations
 
 import socket
+import subprocess
+import sys
 
 import wnd_check
 
@@ -78,14 +80,25 @@ def test_arguments_are_passed_through() -> None:
     assert seen["kwargs"] == {"type": socket.SOCK_STREAM}
 
 
-def test_importing_the_sdk_installs_the_preference() -> None:
-    """The delivery mechanism: every check inherits this simply by importing wnd_check."""
+def test_import_has_no_side_effect() -> None:
+    """Opt-in: importing the SDK must NOT patch the resolver. Checked in a fresh
+    interpreter so in-process installs from other tests can't mask a regression."""
+    result = subprocess.run(
+        [sys.executable, "-c", "import socket, wnd_check; assert not getattr(socket.getaddrinfo, '__wnd_ipv4_first__', False)"],
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+
+
+def test_install_enables_the_preference() -> None:
+    """Calling it installs the process-wide reorder and marks the resolver."""
+    wnd_check.install_ipv4_preference()
     assert getattr(socket.getaddrinfo, "__wnd_ipv4_first__", False)
 
 
 def test_install_is_idempotent() -> None:
-    """Re-importing (or a check calling it again) must not double-wrap the resolver."""
-    installed = socket.getaddrinfo
+    """A second call must not double-wrap the resolver."""
     wnd_check.install_ipv4_preference()
+    installed = socket.getaddrinfo
     wnd_check.install_ipv4_preference()
     assert socket.getaddrinfo is installed

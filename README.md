@@ -56,12 +56,3 @@ if __name__ == "__main__":
 The **wire format** (schema-v2 JSON) is the stable contract, not the Python API. `.run()`
 serialises to it; DEGRADED and FAILED both collapse to `ok: false` until the wire schema
 grows a richer status.
-
-## Networking note
-
-Importing this module installs an **IPv4-first** address-resolution preference
-(`install_ipv4_preference`). On a network that advertises IPv6 and then black-holes it,
-Python's serial, AAAA-first connection walk burns a full TCP timeout per dead address; a
-check on a short runner budget never reaches the A record that answers. Reordering (not
-racing — the deterministic half of Happy Eyeballs) tries the working address first. See
-the module docstring for the full rationale.
