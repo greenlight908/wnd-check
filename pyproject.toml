@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wnd-check"
-version = "0.1.0"
+version = "0.2.0"
 description = "A typed SDK for what-needs-doing-style health checks (IHealthCheck / HealthIndicator-inspired)."
 readme = "README.md"
 requires-python = ">=3.11"
