@@ -1,0 +1,18 @@
+# Hooks this package exposes to CONSUMERS via pre-commit's remote-repo mechanism.
+# A repo enables commit-time SDK enforcement with:
+#
+#   - repo: https://github.com/greenlight908/wnd-check
+#     rev: v0.3.0
+#     hooks:
+#       - id: wnd-sdk-gate
+#
+# (This is distinct from .pre-commit-config.yaml, which is THIS repo's own dev hooks.)
+- id: wnd-sdk-gate
+  name: wnd-check SDK gate
+  description: Fail if a what-needs-doing check is hand-rolled instead of using the typed wnd_check SDK (@check/Result).
+  entry: wnd-sdk-gate
+  language: python
+  # Match repo-local check scripts — `scripts/what-needs-doing/NN-*.py`, top level or one
+  # subdir deep (e.g. assertion/, todo/) — exactly the set a board runner discovers. The
+  # NN- prefix skips helpers/vendored modules (wnd_check.py, check-schema.json) in the dir.
+  files: (?:^|/)scripts/what-needs-doing/(?:[^/]+/)?[0-9][0-9]-[^/]*\.py$

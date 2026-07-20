@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wnd-check"
-version = "0.2.0"
+version = "0.3.0"
 description = "A typed SDK for what-needs-doing-style health checks (IHealthCheck / HealthIndicator-inspired)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,6 +28,11 @@ dependencies = []
 [project.urls]
 Homepage = "https://github.com/greenlight908/wnd-check"
 Issues = "https://github.com/greenlight908/wnd-check/issues"
+
+# The pre-commit hook's entry point (see .pre-commit-hooks.yaml). Installing the package
+# puts `wnd-sdk-gate` on PATH; pre-commit builds an isolated env that does exactly that.
+[project.scripts]
+wnd-sdk-gate = "wnd_check.gate:main"
 
 [dependency-groups]
 dev = [
