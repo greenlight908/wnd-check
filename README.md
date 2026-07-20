@@ -60,3 +60,25 @@ if __name__ == "__main__":
 The **wire format** (schema-v2 JSON) is the stable contract, not the Python API. `.run()`
 serialises to it; DEGRADED and FAILED both collapse to `ok: false` until the wire schema
 grows a richer status.
+
+## Enforcing the SDK (pre-commit hook)
+
+Using `@check` is the *right* way to write a check, but nothing stops the next one being
+hand-rolled (a dict + `print(json.dumps(...))`), which bypasses the slim-OK whitelist and
+reserved-key guards the SDK enforces for free. This package ships a pre-commit hook that
+fails a commit introducing a hand-rolled check — enable it in a consumer repo:
+
+```yaml
+# .pre-commit-config.yaml
+- repo: https://github.com/greenlight908/wnd-check
+  rev: v0.3.0
+  hooks:
+    - id: wnd-sdk-gate
+```
+
+It runs on `scripts/what-needs-doing/**/NN-*.py` and fails any that lacks **both** a real
+`from wnd_check import` statement **and** an `@check` decorator (matched structurally, so a
+docstring that merely *mentions* them doesn't count). The same detector is exposed as
+`wnd_check.gate.classify(source) -> str | None`, so a board-time meta-check and repo-local
+tests can share one definition of "on the SDK" — the commit-time and board-time gates then
+can't drift apart.
