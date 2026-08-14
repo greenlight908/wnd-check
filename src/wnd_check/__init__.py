@@ -49,69 +49,11 @@ from __future__ import annotations
 
 import functools
 import json
-import socket
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 SCHEMA_VERSION = "2.0.0"
-
-
-# --- Address-family ordering (prefer IPv4) --------------------------------
-#
-# Python connects to resolved addresses **serially, in resolver order**, and the
-# resolver returns AAAA (IPv6) records first. `socket.create_connection` — and so
-# `requests`, `httplib2`/`googleapiclient`, and every check built on them — walks
-# that list one address at a time. On a network that advertises IPv6 and then
-# black-holes it, each dead AAAA costs a full TCP connect timeout (~28s observed).
-# Four dead AAAAs ahead of the first working A record is ~112s of dead air, and a
-# runner that kills the check at 60s never reaches the address that answers in
-# 0.22s. Several healthy cloud services were reported red on exactly this.
-#
-# curl, browsers and git are structurally immune because they implement **Happy
-# Eyeballs** (RFC 8305): they *race* the families concurrently and take whichever
-# answers first, so a dead IPv6 path loses by ~250ms and is never noticed. That is
-# also why every hand-probe of the broken network came back clean, and why the bug
-# was invisible until reproduced inside Python.
-#
-# We take the cheaper, deterministic half of the same idea — the "prefer A records"
-# variant, equivalent to Node's `dns.setDefaultResultOrder("ipv4first")`: keep the
-# resolution, just hand IPv4 back first. No threads, no races, no cancellation.
-#   - Broken-IPv6 network: the working A record is tried first -> milliseconds.
-#   - IPv6-only network:   the A records fail fast (no route -> immediate
-#                          ENETUNREACH), then IPv6 is tried and works.
-#   - Dual-stack network:  IPv4 is preferred. We lose IPv6's marginal benefits;
-#                          in this environment that is a trade worth making, because
-#                          a check that cannot report is worse than one that reports
-#                          over IPv4.
-#
-# This is **opt-in**: importing this module has no side effects. Call
-# `install_ipv4_preference()` once, early in your entrypoint (before any host is
-# resolved), to enable it for the process. Call it before building API clients that
-# resolve hosts at module scope — the reorder only affects resolutions after the call.
-#
-# NOTE: it cannot help a process that shells out to a subprocess (a separate Python
-# process with its own socket module) — call it there too.
-
-
-def _prefer_ipv4(getaddrinfo: Callable[..., list]) -> Callable[..., list]:
-    """Wrap `getaddrinfo` so IPv4 results come first, preserving order within a family."""
-
-    @functools.wraps(getaddrinfo)
-    def ordered(*args: object, **kwargs: object) -> list:
-        infos = getaddrinfo(*args, **kwargs)
-        return sorted(infos, key=lambda info: info[0] is not socket.AF_INET)
-
-    return ordered
-
-
-def install_ipv4_preference() -> None:
-    """Idempotently make this process resolve IPv4-first. See the note above."""
-    if getattr(socket.getaddrinfo, "__wnd_ipv4_first__", False):
-        return
-    ordered = _prefer_ipv4(socket.getaddrinfo)
-    ordered.__wnd_ipv4_first__ = True  # type: ignore[attr-defined]
-    socket.getaddrinfo = ordered  # type: ignore[assignment]
 
 
 # Categories the wire schema accepts (check-schema.json `category` enum).
