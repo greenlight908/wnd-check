@@ -74,8 +74,6 @@ _SLIM_OK_KEYS = frozenset(
         "id",
         "items",
         "karenWorthy",
-        "kind",
-        "leverage",
         "message",
         "name",
         "ok",
@@ -91,29 +89,23 @@ _SLIM_OK_KEYS = frozenset(
 
 
 class Status(StrEnum):
-    """Check outcome. Nagios-style, with SKIPPED for "couldn't run" and OPPORTUNITY
-    for "nothing is broken, but there's something worth your time".
+    """Check outcome. Nagios-style, with SKIPPED for "couldn't run".
 
-    Two orthogonal questions:
-      * `is_actionable` — does this surface on the board as ok=false? DEGRADED,
-        FAILED and OPPORTUNITY do; OK and SKIPPED do not. The wire `ok` is
-        `not is_actionable`.
-      * `is_problem` — is this a *failure* that needs fixing? DEGRADED and FAILED
-        only. An OPPORTUNITY is ok=false but not a problem — it buckets separately
-        on the board (by `kind`) so it doesn't inflate the count of things to fix,
-        and it does not set a failing exit code.
+    * `is_actionable` — ok=false on the wire: DEGRADED and FAILED; OK and SKIPPED
+      are green. The wire `ok` is `not is_actionable`.
+    * `is_problem` — a failure that needs fixing (exit code + diagnostics). Today
+      the same set as `is_actionable`.
     """
 
     OK = "ok"
     DEGRADED = "degraded"
     FAILED = "failed"
     SKIPPED = "skipped"
-    OPPORTUNITY = "opportunity"
 
     @property
     def is_actionable(self) -> bool:
         """ok=false on the wire: needs to appear on the board."""
-        return self in (Status.DEGRADED, Status.FAILED, Status.OPPORTUNITY)
+        return self in (Status.DEGRADED, Status.FAILED)
 
     @property
     def is_problem(self) -> bool:
@@ -182,9 +174,6 @@ class Result:
     # 60, an unreachable upstream jumps to 70 because it blocks the whole workflow).
     priority: int | None = None
     data: dict = field(default_factory=dict)
-    # VALUE (not urgency) — only meaningful for an OPPORTUNITY, where the board
-    # ranks by this. 0 = unset. See `Result.opportunity`.
-    leverage: int = 0
 
     @classmethod
     def ok(
@@ -258,33 +247,16 @@ class Result:
     ) -> Result:
         return cls(Status.SKIPPED, summary, url=url, items=items, action=action)
 
-    @classmethod
-    def opportunity(
-        cls,
-        summary: str,
-        *,
-        leverage: int = 0,
-        url: str | None = None,
-        items: list | None = None,
-        action: dict | None = None,
-    ) -> Result:
-        """Nothing is broken, but there's something worth your time (ok=false, but
-        not a *problem*). Ranked on the board by `leverage` (value), not urgency."""
-        return cls(Status.OPPORTUNITY, summary, url=url, items=items, action=action, leverage=leverage)
-
     def to_dict(self, spec: CheckSpec) -> dict:
         """Serialise to a schema-v2 payload, merging in the check's static spec.
 
         Slim when ok=true (only whitelisted keys); rich (fix_hint + arbitrary
-        `data`) only on the *problem* path (DEGRADED/FAILED). An OPPORTUNITY is
-        ok=false but not a problem: it carries `kind`/`leverage`, no diagnostics.
+        `data`) only on the *problem* path (DEGRADED/FAILED).
         """
         actionable = self.status.is_actionable
         problem = self.status.is_problem
         if self.priority is not None and self.priority < 1:
             raise ValueError(f"priority must be >= 1, got {self.priority}")
-        if self.leverage < 0:
-            raise ValueError(f"leverage must be >= 0, got {self.leverage}")
         # Per-outcome override wins over the static spec default (None → inherit).
         effective_priority = self.priority if self.priority is not None else spec.priority
         payload: dict = {
@@ -321,12 +293,6 @@ class Result:
             payload["items"] = self.items
         if self.action is not None:
             payload["action"] = self.action
-        if self.status is Status.OPPORTUNITY:
-            # Not a failure — buckets separately on the board (by `kind`) so it
-            # doesn't inflate the count of things to fix; ranked by `leverage`.
-            payload["kind"] = "opportunity"
-            if self.leverage:
-                payload["leverage"] = self.leverage
         if problem:
             # Diagnostics (fix_hint + arbitrary data) are only for real failures.
             if self.fix_hint:
