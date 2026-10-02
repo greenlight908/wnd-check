@@ -45,10 +45,6 @@ if __name__ == "__main__":
   diagnostics onto the board.
 - **`Result.degraded` / `Result.failed`** — a *problem* (`ok: false`). May carry
   `fix_hint` and arbitrary `data` diagnostics; sets a failing exit code.
-- **`Result.opportunity`** — `ok: false`, but **not a failure**: "nothing is broken,
-  there's something worth your time." Buckets separately (`kind: opportunity`, so it
-  doesn't inflate the count of things to fix) and is ranked by **`leverage`** (value) —
-  a distinct axis from `priority` (urgency). Exits `0`.
 - **`items` / `action`** — *display* payloads (e.g. today's events, a suggested command),
   whitelisted on every path including green.
 - **`tags`** — routing labels (`host:<name>`, `needs:<cap>`, `kind:<domain>`) that a

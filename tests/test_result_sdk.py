@@ -23,16 +23,14 @@ def test_status_actionability() -> None:
     assert not Status.SKIPPED.is_actionable
     assert Status.DEGRADED.is_actionable
     assert Status.FAILED.is_actionable
-    assert Status.OPPORTUNITY.is_actionable
 
 
-def test_status_problem_excludes_opportunity() -> None:
+def test_status_problem() -> None:
     # is_problem == a failure that needs fixing (exit code + diagnostics path).
     assert Status.DEGRADED.is_problem
     assert Status.FAILED.is_problem
     assert not Status.OK.is_problem
     assert not Status.SKIPPED.is_problem
-    assert not Status.OPPORTUNITY.is_problem  # ok=false, but not a failure
 
 
 def test_ok_payload_is_slim() -> None:
@@ -232,41 +230,3 @@ def test_decorator_rejects_non_result() -> None:
 
     with pytest.raises(TypeError):
         bad.run()
-
-
-def test_opportunity_is_ok_false_with_kind_and_leverage() -> None:
-    payload = Result.opportunity("3 new episodes", leverage=20, url="https://x", items=[{"t": "ep"}]).to_dict(SPEC)
-    assert payload["ok"] is False
-    assert payload["kind"] == "opportunity"
-    assert payload["leverage"] == 20
-    assert payload["url"] == "https://x"
-    assert payload["items"] == [{"t": "ep"}]
-    assert "fix_hint" not in payload  # an opportunity is not a problem
-
-
-def test_opportunity_without_leverage_omits_it() -> None:
-    payload = Result.opportunity("something").to_dict(SPEC)
-    assert payload["ok"] is False
-    assert payload["kind"] == "opportunity"
-    assert "leverage" not in payload  # 0 = unset
-
-
-def test_opportunity_exit_code_is_zero(capsys: pytest.CaptureFixture[str]) -> None:
-    # An opportunity present is not a failure — .run() must exit 0.
-    @check(name="feed", emoji="🎧", priority=20)
-    def feed() -> Result:
-        return Result.opportunity("2 new", leverage=20)
-
-    assert feed.run() == 0
-    assert json.loads(capsys.readouterr().out)["kind"] == "opportunity"
-
-
-def test_non_opportunity_has_no_kind_or_leverage() -> None:
-    assert "kind" not in Result.ok("fine").to_dict(SPEC)
-    assert "kind" not in Result.failed("boom").to_dict(SPEC)
-    assert "leverage" not in Result.failed("boom").to_dict(SPEC)
-
-
-def test_negative_leverage_rejected() -> None:
-    with pytest.raises(ValueError):
-        Result.opportunity("x", leverage=-1).to_dict(SPEC)
